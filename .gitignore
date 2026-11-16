@@ -1,0 +1,5 @@
+bin/
+/logsentry
+archives/
+*.gz
+.env
