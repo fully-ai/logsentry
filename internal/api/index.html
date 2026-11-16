@@ -8,8 +8,9 @@
     body { margin: 0; font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
     .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
-    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
     input, select, button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 8px 10px; }
+    button { background: #2f81f7; border: none; cursor: pointer; font-weight: 600; }
     table { width: 100%; border-collapse: collapse; background: #161b22; }
     th, td { border-bottom: 1px solid #30363d; padding: 8px 10px; text-align: left; font-size: 0.88rem; }
     .ERROR, .FATAL { color: #f85149; font-weight: 600; }
@@ -21,25 +22,58 @@
   <h1>LogSentry</h1>
   <div id="anomaly-banner"></div>
   <div class="cards" id="stats"></div>
+  <div class="card" style="margin-bottom:14px;">
+    <strong>Create Alert Rule</strong>
+    <div class="toolbar" style="margin-top:8px;margin-bottom:0;">
+      <input id="r-name" placeholder="Rule name" />
+      <select id="r-lvl"><option value="">Any Level</option><option>WARN</option><option>ERROR</option><option>FATAL</option></select>
+      <input id="r-pat" placeholder="Keyword pattern" />
+      <input id="r-thr" type="number" value="3" min="1" style="width:70px;" />
+      <input id="r-win" type="number" value="60" min="1" style="width:80px;" />
+      <button onclick="addRule()">Add Rule</button>
+    </div>
+  </div>
   <div class="toolbar">
     <input id="q" placeholder="Search logs..." />
     <select id="lvl"><option value="">All Levels</option><option>INFO</option><option>WARN</option><option>ERROR</option><option>FATAL</option></select>
-    <button onclick="loadData()">Refresh</button>
+    <input id="from" placeholder="From RFC3339 (optional)" />
+    <input id="to" placeholder="To RFC3339 (optional)" />
+    <button onclick="loadData()">Filter</button>
   </div>
   <table><thead><tr><th>Time</th><th>Format</th><th>Level</th><th>Category</th><th>Source</th><th>Message</th></tr></thead><tbody id="rows"></tbody></table>
   <script>
+    async function addRule() {
+      const name = document.getElementById('r-name').value.trim();
+      if (!name) return;
+      await fetch('/api/rules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          level: document.getElementById('r-lvl').value,
+          pattern: document.getElementById('r-pat').value,
+          threshold: parseInt(document.getElementById('r-thr').value, 10),
+          window_sec: parseInt(document.getElementById('r-win').value, 10)
+        })
+      });
+      document.getElementById('r-name').value = '';
+      await loadData();
+    }
     async function loadData() {
       const st = await fetch('/api/stats').then(r => r.json());
       const alerts = await fetch('/api/alerts').then(r => r.json());
       document.getElementById('anomaly-banner').innerHTML = st.anomaly_detected ? `<div class="anomaly">Anomaly Detected: ${st.anomaly_reason}</div>` : '';
+      const cats = Object.entries(st.by_category || {}).map(([k,v]) => `${k}:${v}`).join(' ');
       document.getElementById('stats').innerHTML = `
         <div class="card"><div>Total Logs</div><h2>${st.total_entries}</h2></div>
         <div class="card"><div>Errors</div><h2>${st.error_count}</h2></div>
         <div class="card"><div>Alerts Fired</div><h2>${(alerts.alerts||[]).length}</h2></div>
+        <div class="card"><div>Categories</div><small>${cats || 'none'}</small></div>
       `;
       const p = new URLSearchParams();
       if (document.getElementById('q').value) p.set('q', document.getElementById('q').value);
       if (document.getElementById('lvl').value) p.set('level', document.getElementById('lvl').value);
+      if (document.getElementById('from').value) p.set('from', document.getElementById('from').value);
+      if (document.getElementById('to').value) p.set('to', document.getElementById('to').value);
       const res = await fetch('/api/logs?' + p.toString()).then(r => r.json());
       const tb = document.getElementById('rows');
       tb.innerHTML = '';

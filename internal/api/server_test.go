@@ -50,4 +50,21 @@ func TestAPIIngestQueryRulesAndStats(t *testing.T) {
 	if err := json.Unmarshal(wAlerts.Body.Bytes(), &alertRes); err != nil || len(alertRes.Alerts) != 1 {
 		t.Fatalf("expected 1 alert event, got %+v", alertRes)
 	}
+
+	// Time-range filtering
+	wRange := httptest.NewRecorder()
+	h.ServeHTTP(wRange, httptest.NewRequest(http.MethodGet, "/api/logs?from=2026-11-16T10:00:02Z&to=2026-11-16T10:00:10Z", nil))
+	var rangeRes struct {
+		Entries []logs.Entry `json:"entries"`
+	}
+	if err := json.Unmarshal(wRange.Body.Bytes(), &rangeRes); err != nil || len(rangeRes.Entries) != 1 {
+		t.Fatalf("expected 1 entry in time range, got %+v", rangeRes)
+	}
+
+	// Invalid rule name rejected
+	wBadRule := httptest.NewRecorder()
+	h.ServeHTTP(wBadRule, httptest.NewRequest(http.MethodPost, "/api/rules", bytes.NewBufferString(`{"threshold":1}`)))
+	if wBadRule.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing rule name, got %d", wBadRule.Code)
+	}
 }
