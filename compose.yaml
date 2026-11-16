@@ -1,0 +1,8 @@
+services:
+  logsentry:
+    build: .
+    ports:
+      - "8095:8095"
+    volumes:
+      - ./sample-logs:/var/log/watched:ro
+    restart: unless-stopped
