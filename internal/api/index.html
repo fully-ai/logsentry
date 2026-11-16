@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogSentry Dashboard</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+    input, select, button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 8px 10px; }
+    table { width: 100%; border-collapse: collapse; background: #161b22; }
+    th, td { border-bottom: 1px solid #30363d; padding: 8px 10px; text-align: left; font-size: 0.88rem; }
+    .ERROR, .FATAL { color: #f85149; font-weight: 600; }
+    .WARN { color: #d29922; }
+    .anomaly { background: #3b1219; border: 1px solid #f85149; padding: 10px; border-radius: 6px; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <h1>LogSentry</h1>
+  <div id="anomaly-banner"></div>
+  <div class="cards" id="stats"></div>
+  <div class="toolbar">
+    <input id="q" placeholder="Search logs..." />
+    <select id="lvl"><option value="">All Levels</option><option>INFO</option><option>WARN</option><option>ERROR</option><option>FATAL</option></select>
+    <button onclick="loadData()">Refresh</button>
+  </div>
+  <table><thead><tr><th>Time</th><th>Format</th><th>Level</th><th>Category</th><th>Source</th><th>Message</th></tr></thead><tbody id="rows"></tbody></table>
+  <script>
+    async function loadData() {
+      const st = await fetch('/api/stats').then(r => r.json());
+      const alerts = await fetch('/api/alerts').then(r => r.json());
+      document.getElementById('anomaly-banner').innerHTML = st.anomaly_detected ? `<div class="anomaly">Anomaly Detected: ${st.anomaly_reason}</div>` : '';
+      document.getElementById('stats').innerHTML = `
+        <div class="card"><div>Total Logs</div><h2>${st.total_entries}</h2></div>
+        <div class="card"><div>Errors</div><h2>${st.error_count}</h2></div>
+        <div class="card"><div>Alerts Fired</div><h2>${(alerts.alerts||[]).length}</h2></div>
+      `;
+      const p = new URLSearchParams();
+      if (document.getElementById('q').value) p.set('q', document.getElementById('q').value);
+      if (document.getElementById('lvl').value) p.set('level', document.getElementById('lvl').value);
+      const res = await fetch('/api/logs?' + p.toString()).then(r => r.json());
+      const tb = document.getElementById('rows');
+      tb.innerHTML = '';
+      for (const e of (res.entries || [])) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${e.timestamp}</td><td>${e.format}</td><td class="${e.level}">${e.level}</td><td>${e.category}</td><td>${e.source}</td><td>${e.message}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    loadData();
+    setInterval(loadData, 5000);
+  </script>
+</body>
+</html>
